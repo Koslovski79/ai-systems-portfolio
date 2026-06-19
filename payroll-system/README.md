@@ -1,29 +1,34 @@
 # Payroll System
 
-Full-stack payroll management for South African small and medium
-enterprises. SARS-compliant, multi-tenant, production-deployed.
+Full-stack payroll management for South African small and medium enterprises.
+SARS-compliant, multi-tenant, production-deployed.
 
-**Status:** Production. Private repository (handles employee PII).
+**Status:** Production — private repository (handles employee PII)
 
-## What it does
+---
 
-End-to-end payroll for SMEs:
+## What It Does
+
+End-to-end payroll for South African SMEs who need SARS compliance without
+paying R500+/month for legacy SaaS platforms.
+
 - Employee management with SA ID validation
-- SARS tax tables (PAYE, UIF, SDL)
+- SARS tax calculations — PAYE, UIF, SDL
 - Payslip generation (PDF)
-- EMP201 / EMP501 monthly and biannual submissions
+- EMP201 monthly submissions
+- EMP501 biannual reconciliations (interim and final)
 - Leave management
-- Audit log
+- Full audit log — every change tracked with user and timestamp
+- Role-based access — admin, payroll clerk, employee viewer
 
-Designed for businesses that don't want to pay R500+/month for legacy
-SaaS payroll but need SARS compliance.
+---
 
 ## Architecture
 
 ```
   +------------------+        +-------------------+
   |   Django admin   |  HTTP  |   Django REST     |
-  |   (UI for HR)    | <----> |   Framework API   |
+  |   (HR interface) | <----> |   Framework API   |
   +------------------+        +---------+---------+
                                         |
                                         v
@@ -34,9 +39,9 @@ SaaS payroll but need SARS compliance.
                                         |
                                         v
                               +-------------------+
-                              |   Background      |
-                              |   workers         |
-                              |   (Celery)        |
+                              |   Celery workers  |
+                              | (payslip gen,     |
+                              |  SARS submissions)|
                               +-------------------+
                                         |
                                         v
@@ -46,34 +51,50 @@ SaaS payroll but need SARS compliance.
                               +-------------------+
 ```
 
+---
+
 ## Stack
 
-- **Django 4.2** — web framework + admin
-- **Django REST Framework** — JSON API for mobile/3rd-party
-- **PostgreSQL** — primary data store (multi-tenant)
-- **Celery + Redis** — async task queue (payslip generation, SARS submissions)
-- **reportlab** — PDF payslip generation
-- **pytest + factory_boy** — test suite
+| Layer | Technology |
+|---|---|
+| Web framework | Django 4.2 |
+| API | Django REST Framework |
+| Database | PostgreSQL (multi-tenant) |
+| Task queue | Celery + Redis |
+| PDF generation | ReportLab |
+| Test suite | pytest + factory_boy |
 
-## Key features
+---
 
-- **SARS tax tables** — PAYE, UIF, SDL computed correctly per tax year
-- **EMP201 monthly submissions** — generate SARS-ready CSV/Excel
-- **EMP501 biannual reconciliations** — interim and final reconciliations
-- **Multi-tenant** — single deployment, multiple companies
-- **Audit log** — every change tracked with user + timestamp
-- **Role-based access** — admin, payroll clerk, employee viewer
+## Key Features
 
-## Lessons learned
+**SARS compliance**
+PAYE, UIF, and SDL computed correctly per tax year. Tax tables stored as
+versioned database rows — not hardcoded — so annual SARS updates are a
+data change, not a code deployment.
 
-1. **Money math is unforgiving.** Float arithmetic is fine for
-   visualization, never for storage. Decimal types everywhere.
-2. **Tax tables change.** Don't hardcode them — store as DB rows,
-   versioned by effective date.
-3. **Audit log is a compliance requirement, not a nice-to-have.** Build
-   it from day one.
-4. **Payslip generation is the hot path.** It must be reliable, fast,
-   and produce identical PDFs across runs. Celery + a deterministic
-   template engine is the answer.
-5. **Multi-tenancy with row-level isolation beats database-per-tenant
-   for SMEs.** Easier to operate, cheaper to host, easier to back up.
+**EMP201 and EMP501 submissions**
+Monthly and biannual SARS submissions generated as SARS-ready CSV/Excel.
+EMP501 handles both interim and final reconciliations.
+
+**Multi-tenancy**
+Single deployment, multiple companies. Row-level tenant isolation — easier
+to operate, cheaper to host, and simpler to back up than database-per-tenant.
+
+**Audit log**
+Every change logged with user, timestamp, and before/after values.
+A compliance requirement, not a nice-to-have.
+
+**Payslip generation**
+Deterministic PDF output via Celery + ReportLab. Identical output across
+runs — critical for reissuing historical payslips.
+
+---
+
+## Lessons Learned
+
+1. **Money math is unforgiving.** Float arithmetic is fine for display, never for storage or calculation. `Decimal` types everywhere, from database to PDF.
+2. **Tax tables change annually.** Store them as versioned database rows with an effective date. Hardcoding tax rates means a code deployment every February.
+3. **Audit log is a compliance requirement.** Build it from day one. Retrofitting it into a production payroll system is painful.
+4. **Payslip generation is the hot path.** It must be reliable, fast, and deterministic. A Celery task with a template-driven PDF engine handles this cleanly.
+5. **Row-level multi-tenancy beats database-per-tenant for SMEs.** Simpler operations, lower hosting cost, easier backups — with the same data isolation guarantees.
